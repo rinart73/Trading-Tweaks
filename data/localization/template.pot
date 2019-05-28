@@ -1,0 +1,55 @@
+# ==========mods\Trading Tweaks\data\scripts\entity\merchants\consumer.lua ==========
+#:mods\Trading Tweaks\data\scripts\entity\merchants\consumer.lua:
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Station configuration"
+msgstr ""
+
+
+# ==========mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua ==========
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Good Settings"
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Change good"
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Add sold good"
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Add bought good"
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "The station already has all types of goods."
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Added new good '%s' to trading station."
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "The station already sells/buys this type of good."
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Moves good from sold to bought and vice versa."
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Reached the limits of 15 bought/sold goods."
+msgstr ""
+
+
+# ==========mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua ==========
+#:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
+msgid "The station doesn't sell goods right now."
+msgstr ""
+
+#:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
+msgid "The station doesn't buy goods right now."
+msgstr ""
+
+

@@ -1,0 +1,55 @@
+# ==========mods\Trading Tweaks\data\scripts\entity\merchants\consumer.lua ==========
+#:mods\Trading Tweaks\data\scripts\entity\merchants\consumer.lua:
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Station configuration"
+msgstr "Управление станцией"
+
+
+# ==========mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua ==========
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Good Settings"
+msgstr "Настройки товара"
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Change good"
+msgstr "Изменить товар"
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Add sold good"
+msgstr "Добавить продаваемый товар"
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Add bought good"
+msgstr "Добавить покупаемый товар"
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "The station already has all types of goods."
+msgstr "Эта станция уже имеет все типы товаров."
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Added new good '%s' to trading station."
+msgstr "Добавлен новый товар '%s' в торговую станцию."
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "The station already sells/buys this type of good."
+msgstr "Эта станция уже продает/покупает этот тип товара."
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Moves good from sold to bought and vice versa."
+msgstr "Перемещает товар из продаваемых в покупаемые и наоборот."
+
+#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+msgid "Reached the limits of 15 bought/sold goods."
+msgstr "Достигнут лимит в 15 покупаемых/продаваемых товаров."
+
+
+# ==========mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua ==========
+#:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
+msgid "The station doesn't sell goods right now."
+msgstr "Эта станция в данный момент не продает товары."
+
+#:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
+msgid "The station doesn't buy goods right now."
+msgstr "Эта станция в данный момент не покупает товары."
+
+
