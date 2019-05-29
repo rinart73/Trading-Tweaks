@@ -12,8 +12,9 @@ end
 local Log = Azimuth.logs("TradingTweaks", config.LogLevel)
 
 
-TradingPost.trader.tax = 0
+TradingPost.trader.tax = 0 -- no tax for players
 TradingPost.trader.factionPaymentFactor = 1.0 -- players pay when trading station buys goods
+TradingPost.trader.minTradingRelations = -45000
 
 if onClient() then
 
@@ -496,7 +497,7 @@ function TradingPost.trader:sendGoods(playerIndex) -- overridden
         local tradingTweaks = { -- sync with client
           buyFromOthers = self.buyFromOthers,
           sellToOthers = self.sellToOthers,
-          goodsMargins = self.goodsMargins
+          goodsMargins = self.goodsMargins or {}
         }
         invokeClientFunction(player, "receiveGoods", self.buyPriceFactor, self.sellPriceFactor, self.boughtGoods, self.soldGoods, self.policies, tradingTweaks)
     else

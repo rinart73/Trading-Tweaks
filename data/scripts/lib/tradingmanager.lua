@@ -461,7 +461,7 @@ function TradingManager:updateSoldGoodAmount(index) -- overridden
 
         if self.soldGoodLineByIndex then
             local line = self.soldGoodLineByIndex[index]
-            self:updateSoldGoodGui(index, good, self:getSellPrice(good.name, player.index))
+            self:updateSoldGoodGui(line, good, self:getSellPrice(good.name, player.index))
         end
     end
 end
@@ -498,18 +498,30 @@ else -- onServer
 local tradingTweaks_sellToShip = TradingManager.sellToShip
 function TradingManager:sellToShip(shipIndex, goodName, amount, noDockCheck)
     if not self.sellToOthers then
-        local shipFaction, ship = getInteractingFactionByShip(shipIndex, callingPlayer, AlliancePrivilege.SpendResources)
+        local shipFaction = getInteractingFactionByShip(shipIndex, callingPlayer, AlliancePrivilege.SpendResources)
         if not shipFaction then return end
 
+        local entity = Entity()
         if callingPlayer then
             local player = Player(callingPlayer)
-            if player.index ~= shipFaction.index and player.allianceIndex ~= shipFaction.index then
+            if player.index ~= entity.factionIndex and player.allianceIndex ~= entity.factionIndex then
                 player:sendChatMessage("", 1, "The station doesn't sell goods right now."%_t)
                 return
             end
+        elseif shipFaction.index ~= entity.factionIndex then
+            return
         end
     end
-    if callingPlayer then noDockCheck = false end -- no cheating
+    if callingPlayer then
+        noDockCheck = false -- no cheating
+        -- no trading if faction relations are lower than certain threshold
+        local status, msg = CheckFactionInteraction(callingPlayer, self.minTradingRelations and self.minTradingRelations or -10000)
+        if not status then
+            Player(callingPlayer):sendChatMessage("", 1, msg)
+            return
+        end
+    end
+    
 
     tradingTweaks_sellToShip(self, shipIndex, goodName, amount, noDockCheck)
 end
@@ -517,18 +529,29 @@ end
 local tradingTweaks_buyFromShip = TradingManager.buyFromShip
 function TradingManager:buyFromShip(shipIndex, goodName, amount, noDockCheck)
     if not self.buyFromOthers then
-        local shipFaction, ship = getInteractingFactionByShip(shipIndex, callingPlayer, AlliancePrivilege.SpendResources)
+        local shipFaction = getInteractingFactionByShip(shipIndex, callingPlayer, AlliancePrivilege.SpendResources)
         if not shipFaction then return end
 
+        local entity = Entity()
         if callingPlayer then
             local player = Player(callingPlayer)
-            if player.index ~= shipFaction.index and player.allianceIndex ~= shipFaction.index then
+            if player.index ~= entity.factionIndex and player.allianceIndex ~= entity.factionIndex then
                 player:sendChatMessage("", 1, "The station doesn't buy goods right now."%_t)
                 return
             end
+        elseif shipFaction.index ~= entity.factionIndex then
+            return
         end
     end
-    if callingPlayer then noDockCheck = false end -- no cheating
+    if callingPlayer then
+        noDockCheck = false -- no cheating
+        -- no trading if faction relations are lower than certain threshold
+        local status, msg = CheckFactionInteraction(callingPlayer, self.minTradingRelations and self.minTradingRelations or -10000)
+        if not status then
+            Player(callingPlayer):sendChatMessage("", 1, msg)
+            return
+        end
+    end
 
     tradingTweaks_buyFromShip(self, shipIndex, goodName, amount, noDockCheck)
 end
