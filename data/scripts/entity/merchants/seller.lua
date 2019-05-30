@@ -1,1 +1,0 @@
-Seller.trader.minTradingRelations = -20000

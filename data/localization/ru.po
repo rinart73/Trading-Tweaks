@@ -52,4 +52,7 @@ msgstr "Эта станция в данный момент не продает �
 msgid "The station doesn't buy goods right now."
 msgstr "Эта станция в данный момент не покупает товары."
 
+#:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
+msgid " (Optional)"
+msgstr " (Необяз.)"
 

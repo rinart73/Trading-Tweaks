@@ -1,5 +1,4 @@
 Consumer.trader.factionPaymentFactor = 1.0 -- players pay when consumer station buys goods
-Consumer.trader.minTradingRelations = -20000
 
 if onClient() then
 

@@ -138,6 +138,14 @@ function TradingManager:getSellPrice(goodName, buyingFaction) -- overridden
     return price, basePrice
 end
 
+local tradingTweaks_CreateNamespace = PublicNamespace.CreateNamespace
+function PublicNamespace.CreateNamespace()
+    local result = tradingTweaks_CreateNamespace()
+
+    result.trader.namespace = result -- so trader could call current namespace functions
+    return result
+end
+
 
 if onClient() then
 
@@ -158,9 +166,23 @@ function TradingManager:refreshUI() -- overridden
     self.soldGoodIndexByLine = {}
     self.soldGoodLineByIndex = {}
 
+    self.factoryOptionalGoods = {}
+    if self.namespace and self.namespace.tradingTweaks_getProduction then -- it's factory
+        local production = self.namespace.tradingTweaks_getProduction()
+        if production and production.ingredients then
+            for _, ingredient in pairs(production.ingredients) do
+                if ingredient.optional == 1 then
+                    self.factoryOptionalGoods[ingredient.name] = true
+                end
+            end
+        end
+    end
+    
     local i = 1
+    local price, basePrice
     for j, good in Azimuth.orderedPairs(self.boughtGoods, function(t, a, b) return t[a].name%_t < t[b].name%_t end) do
-        self:updateBoughtGoodGui(i, good, self:getBuyPrice(good.name, player.index))
+        price, basePrice = self:getBuyPrice(good.name, player.index)
+        self:updateBoughtGoodGui(i, good, price, basePrice, self.factoryOptionalGoods[good.name])
         self.boughtGoodIndexByLine[i] = j
         self.boughtGoodLineByIndex[j] = i
         i = i + 1
@@ -175,15 +197,36 @@ function TradingManager:refreshUI() -- overridden
     end
 end
 
-local tradingTweaks_updateBoughtGoodGui = TradingManager.updateBoughtGoodGui
-function TradingManager:updateBoughtGoodGui(index, good, price)
+function TradingManager:updateBoughtGoodGui(index, good, price, _, isOptional) -- overridden
     if not self.guiInitialized then return end
+
     local line = self.boughtLines[index]
     if not line then return end
 
-    tradingTweaks_updateBoughtGoodGui(self, index, good, price)
+    local maxAmount = self:getMaxStock(good.size)
+    local amount = self:getNumGoods(good.name)
 
+    if isOptional then
+        line.name.caption = good:displayName(100) .. " (Optional)"%_t
+    else
+        line.name.caption = good:displayName(100)
+    end
+    line.stock.caption = amount .. "/" .. maxAmount
+    line.price.caption = createMonetaryString(price)
+    line.size.caption = round(good.size, 2)
+    line.icon.picture = good.icon
+
+    local ownCargo = 0
     local player = Player()
+    local ship = Entity(player.craftIndex)
+    if ship then
+        ownCargo = ship:getCargoAmount(good) or 0
+    end
+    if ownCargo == 0 then ownCargo = "-" end
+    line.you.caption = tostring(ownCargo)
+
+    line:show()
+
     local entity = Entity()
     if player.index == entity.factionIndex or player.allianceIndex == entity.factionIndex then
         line.button.active = true
@@ -444,7 +487,12 @@ function TradingManager:updateBoughtGoodAmount(index) -- overridden
 
         if self.boughtGoodLineByIndex then
             local line = self.boughtGoodLineByIndex[index]
-            self:updateBoughtGoodGui(line, good, self:getBuyPrice(good.name, player.index))
+            local isOptional = false
+            local price, basePrice = self:getBuyPrice(good.name, player.index)
+            if self.factoryOptionalGoods then
+                isOptional = self.factoryOptionalGoods[good.name]
+            end
+            self:updateBoughtGoodGui(line, good, price, basePrice, isOptional)
         end
     end
 end
@@ -515,10 +563,11 @@ function TradingManager:sellToShip(shipIndex, goodName, amount, noDockCheck)
     if callingPlayer then
         noDockCheck = false -- no cheating
         -- no trading if faction relations are lower than certain threshold
-        local status, msg = CheckFactionInteraction(callingPlayer, self.minTradingRelations and self.minTradingRelations or -10000)
-        if not status then
-            Player(callingPlayer):sendChatMessage("", 1, msg)
-            return
+        if self.namespace and self.namespace.interactionPossible then
+            if not self.namespace.interactionPossible(callingPlayer) then
+                Player(callingPlayer):sendChatMessage("", 1, "Our records say that we're not allowed to do business with you.\n\nCome back when your relations to our faction are better."%_t)
+                return
+            end
         end
     end
     
@@ -546,10 +595,11 @@ function TradingManager:buyFromShip(shipIndex, goodName, amount, noDockCheck)
     if callingPlayer then
         noDockCheck = false -- no cheating
         -- no trading if faction relations are lower than certain threshold
-        local status, msg = CheckFactionInteraction(callingPlayer, self.minTradingRelations and self.minTradingRelations or -10000)
-        if not status then
-            Player(callingPlayer):sendChatMessage("", 1, msg)
-            return
+        if self.namespace and self.namespace.interactionPossible then
+            if not self.namespace.interactionPossible(callingPlayer) then
+                Player(callingPlayer):sendChatMessage("", 1, "Our records say that we're not allowed to do business with you.\n\nCome back when your relations to our faction are better."%_t)
+                return
+            end
         end
     end
 

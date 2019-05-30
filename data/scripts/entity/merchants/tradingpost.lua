@@ -1,20 +1,26 @@
 include("goods")
 local Azimuth = include("azimuthlib-basic")
 
-local configOptions = {
+local tradingTweaks_configOptions = {
   _version = {default = "0.1", comment = "Config version. Don't touch."},
   LogLevel = {default = 2, min = 0, max = 4, format = "floor", comment = "0 - Disable, 1 - Errors, 2 - Warnings, 3 - Info, 4 - Debug."}
 }
-local config, isModified = Azimuth.loadConfig("TradingTweaks", configOptions)
-if isModified then
-    Azimuth.saveConfig("TradingTweaks", config, configOptions)
+if onServer() then
+    tradingTweaks_configOptions = {
+      _version = {default = "0.1", comment = "Config version. Don't touch."},
+      LogLevel = {default = 2, min = 0, max = 4, format = "floor", comment = "0 - Disable, 1 - Errors, 2 - Warnings, 3 - Info, 4 - Debug."},
+      OptionalGoodsBonus = { default = 0.1, min = 0, max = 1, comment = "How much having optional goods buffs factory production output (0.1 = 10%)." }
+    }
 end
-local Log = Azimuth.logs("TradingTweaks", config.LogLevel)
+local TradingTweaksConfig, tradingTweaks_isModified = Azimuth.loadConfig("TradingTweaks", tradingTweaks_configOptions)
+if tradingTweaks_isModified then
+    Azimuth.saveConfig("TradingTweaks", TradingTweaksConfig, tradingTweaks_configOptions)
+end
+local TradingTweaksLog = Azimuth.logs("TradingTweaks", TradingTweaksConfig.LogLevel)
 
 
 TradingPost.trader.tax = 0 -- no tax for players
 TradingPost.trader.factionPaymentFactor = 1.0 -- players pay when trading station buys goods
-TradingPost.trader.minTradingRelations = -45000
 
 if onClient() then
 
@@ -32,7 +38,7 @@ local tradingTweaks_currentGood = {}
 local function tradingTweaks_getAddGoodName()
     local goodName = tradingTweaks_goodByIndex[tradingTweaks_addGoodComboBox.selectedIndex+1]
     if not goodName then
-        Log.Error("onGoodChanged - good doesn't exist")
+        TradingTweaksLog.Error("onGoodChanged - good doesn't exist")
         return
     end
     -- Check if good already exists
@@ -321,12 +327,12 @@ end
 function TradingPost.tradingTweaks_onBuySwapButtonPressed(button)
     local line = tradingTweaks_soldLineBySwapBtn[button.index]
     if not line then
-        Log.Error("Sell swap button - good doesn't exist")
+        TradingTweaksLog.Error("Sell swap button - good doesn't exist")
         return
     end
     local goodIndex = TradingPost.trader.soldGoodIndexByLine[line]
     if not goodIndex then
-        Log.Error("Buy swap button - good doesn't exist")
+        TradingTweaksLog.Error("Buy swap button - good doesn't exist")
         return
     end
     local good = TradingPost.trader.soldGoods[goodIndex]
@@ -342,12 +348,12 @@ end
 function TradingPost.tradingTweaks_onSellSwapButtonPressed(button)
     local line = tradingTweaks_boughtLineBySwapBtn[button.index]
     if not line then
-        Log.Error("Sell swap button - good doesn't exist")
+        TradingTweaksLog.Error("Sell swap button - good doesn't exist")
         return
     end
     local goodIndex = TradingPost.trader.boughtGoodIndexByLine[line]
     if not goodIndex then
-        Log.Error("Sell swap button - good doesn't exist")
+        TradingTweaksLog.Error("Sell swap button - good doesn't exist")
         return
     end
     local good = TradingPost.trader.boughtGoods[goodIndex]
@@ -363,12 +369,12 @@ end
 function TradingPost.tradingTweaks_onBuyConfigButtonPressed(button)
     local line = tradingTweaks_soldLineByConfigBtn[button.index]
     if not line then
-        Log.Error("Buy config button - good doesn't exist")
+        TradingTweaksLog.Error("Buy config button - good doesn't exist")
         return
     end
     local goodIndex = TradingPost.trader.soldGoodIndexByLine[line]
     if not goodIndex then
-        Log.Error("Buy config button - good doesn't exist")
+        TradingTweaksLog.Error("Buy config button - good doesn't exist")
         return
     end
     local good = TradingPost.trader.soldGoods[goodIndex]
@@ -388,12 +394,12 @@ end
 function TradingPost.tradingTweaks_onSellConfigButtonPressed(button)
     local line = tradingTweaks_boughtLineByConfigBtn[button.index]
     if not line then
-        Log.Error("Sell config button - good doesn't exist")
+        TradingTweaksLog.Error("Sell config button - good doesn't exist")
         return
     end
     local goodIndex = TradingPost.trader.boughtGoodIndexByLine[line]
     if not goodIndex then
-        Log.Error("Sell config button - good doesn't exist")
+        TradingTweaksLog.Error("Sell config button - good doesn't exist")
         return
     end
     local good = TradingPost.trader.boughtGoods[goodIndex]
@@ -413,7 +419,7 @@ end
 function TradingPost.tradingTweaks_onGoodChanged()
     local goodName = tradingTweaks_goodByIndex[tradingTweaks_goodComboBox.selectedIndex+1]
     if not goodName then
-        Log.Error("onGoodChanged - good doesn't exist")
+        TradingTweaksLog.Error("onGoodChanged - good doesn't exist")
         return
     end
     if tradingTweaks_currentGood.name == goodName then return end
@@ -577,7 +583,7 @@ function TradingPost.tradingTweaks_addGood(isSold, goodName)
 
     local newGood = goods[goodName]
     if not newGood then
-        Log.Error("addGood - incorrect good name")
+        TradingTweaksLog.Error("addGood - incorrect good name")
         return
     end
     local found = false
@@ -626,7 +632,7 @@ function TradingPost.tradingTweaks_changeGood(isSold, prevName, newName)
     
     local newGood = goods[newName]
     if not newGood then
-        Log.Error("changeGood - incorrect good name")
+        TradingTweaksLog.Error("changeGood - incorrect good name")
         return
     end
     local found = false
@@ -667,7 +673,7 @@ function TradingPost.tradingTweaks_changeGood(isSold, prevName, newName)
         end
     end
     if not found then
-        Log.Error("changeGood - couldn't find the old good")
+        TradingTweaksLog.Error("changeGood - couldn't find the old good")
         return
     end
     TradingPost.trader.goodsMargins[prevName] = nil
@@ -682,7 +688,7 @@ function TradingPost.tradingTweaks_swapGood(isSold, goodName)
 
     local newGood = goods[goodName]
     if not newGood then
-        Log.Error("swapGood - incorrect good name")
+        TradingTweaksLog.Error("swapGood - incorrect good name")
         return
     end
     local found = false
@@ -699,7 +705,7 @@ function TradingPost.tradingTweaks_swapGood(isSold, goodName)
             end
         end
         if not found then
-            Log.Error("swapGood - couldn't find good")
+            TradingTweaksLog.Error("swapGood - couldn't find good")
             return
         end
         TradingPost.trader.boughtGoods[#TradingPost.trader.boughtGoods+1] = newGood:good()
@@ -716,7 +722,7 @@ function TradingPost.tradingTweaks_swapGood(isSold, goodName)
             end
         end
         if not found then
-            Log.Error("swapGood - couldn't find good")
+            TradingTweaksLog.Error("swapGood - couldn't find good")
             return
         end
         TradingPost.trader.soldGoods[#TradingPost.trader.soldGoods+1] = newGood:good()
@@ -753,7 +759,7 @@ function TradingPost.tradingTweaks_removeGood(isSold, prevName)
         TradingPost.trader.numBought = #TradingPost.trader.boughtGoods
     end
     if not found then
-        Log.Error("removeGood - couldn't find good")
+        TradingTweaksLog.Error("removeGood - couldn't find good")
         return
     end
     TradingPost.trader.goodsMargins[prevName] = nil
