@@ -11,131 +11,30 @@ function TradingManager:getStock(name) -- overridden
     return self:getNumGoods(name), self:getMaxGoods(name), sellPriceFactor, buyPriceFactor
 end
 
--- price for which goods are bought by this from others
-function TradingManager:getBuyPrice(goodName, sellingFactionIndex) -- overridden
-    local good = self:getBoughtGoodByName(goodName)
-    if not good then return 0 end
+local tradingTweaks_getBuyPrice = TradingManager.getBuyPrice
+function TradingManager:getBuyPrice(goodName, sellingFactionIndex)
+    local price, basePrice = tradingTweaks_getBuyPrice(self, goodName, sellingFactionIndex)
+    if not basePrice then return price end
 
-    if self.factionPaymentFactor == 0 then
-        local stationFaction = Faction()
-
-        if not stationFaction or stationFaction.index == sellingFactionIndex then return 0 end
-
-        if stationFaction.isAlliance then
-            -- is selling player member of the station alliance?
-            local seller = Player(sellingFactionIndex)
-            if seller and seller.allianceIndex == stationFaction.index then return 0 end
-        end
-
-        if stationFaction.isPlayer then
-            -- does the station belong to a player that is a member of the ship's alliance?
-            local stationPlayer = Player(stationFaction.index)
-            if stationPlayer and stationPlayer.allianceIndex == sellingFactionIndex then return 0 end
-        end
-    end
-
-    -- empty stock -> higher price
-    local maxStock = self:getMaxStock(good.size)
-    local factor = 1
-
-    if maxStock > 0 then
-        factor = math.min(maxStock, self:getNumGoods(goodName)) / maxStock -- 0 to 1 where 1 is 'full stock'
-        factor = 1 - factor -- 1 to 0 where 0 is 'full stock'
-        factor = factor * 0.2 -- 0.2 to 0
-        factor = factor + 0.9 -- 1.1 to 0.9; 'no goods' to 'full'
-    end
-
-    local relationFactor = 1
-    if sellingFactionIndex then
-        local sellerIndex = nil
-        if type(sellingFactionIndex) == "number" then
-            sellerIndex = sellingFactionIndex
-        else
-            sellerIndex = sellingFactionIndex.index
-        end
-
-        if sellerIndex then
-            local relations = Faction():getRelations(sellerIndex)
-
-            if relations < -10000 then
-                -- bad relations: faction pays less for the goods
-                -- 10% to 100% from -100.000 to -10.000
-                relationFactor = lerp(relations, -100000, -10000, 0.1, 1.0)
-            elseif relations >= 50000 then
-                -- very good relations: factions pays MORE for the goods
-                -- 100% to 120% from 80.000 to 100.000
-                relationFactor = lerp(relations, 80000, 100000, 1.0, 1.15)
-            end
-
-            if Faction().index == sellerIndex then relationFactor = 0 end
-        end
-    end
-    
     local tradingStationFactor = 1
     if self.goodsMargins then
         tradingStationFactor = self.goodsMargins[goodName] or 1
     end
 
-    local basePrice = round(good.price * self.buyPriceFactor * tradingStationFactor)
-    local price = round(good.price * relationFactor * factor * self.buyPriceFactor * tradingStationFactor)
-
-    return price, basePrice
+    return round(price * tradingStationFactor), round(basePrice * tradingStationFactor)
 end
 
--- price for which goods are sold from this to others
-function TradingManager:getSellPrice(goodName, buyingFaction) -- overridden
-    local good = self:getSoldGoodByName(goodName)
-    if not good then return 0 end
-
-    -- empty stock -> higher price
-    local maxStock = self:getMaxStock(good.size)
-    local factor = 1
-
-    if maxStock > 0 then
-        factor = math.min(maxStock, self:getNumGoods(goodName)) / maxStock -- 0 to 1 where 1 is 'full stock'
-        factor = 1 - factor -- 1 to 0 where 0 is 'full stock'
-        factor = factor * 0.2 -- 0.2 to 0
-        factor = factor + 0.9 -- 1.1 to 0.9; 'no goods' to 'full'
-    end
-
-    local relationFactor = 1
-    if buyingFaction then
-        local sellerIndex = nil
-        if type(buyingFaction) == "number" then
-            sellerIndex = buyingFaction
-        else
-            sellerIndex = buyingFaction.index
-        end
-
-        if sellerIndex then
-            local faction = Faction()
-            if faction then
-                local relations = faction:getRelations(sellerIndex)
-
-                if relations < -10000 then
-                    -- bad relations: faction wants more for the goods
-                    -- 200% to 100% from -100.000 to -10.000
-                    relationFactor = lerp(relations, -100000, -10000, 2.0, 1.0)
-                elseif relations > 30000 then
-                    -- good relations: factions start giving player better prices
-                    -- 100% to 80% from 30.000 to 90.000
-                    relationFactor = lerp(relations, 30000, 90000, 1.0, 0.8)
-                end
-
-                if faction.index == sellerIndex then relationFactor = 0 end
-            end
-        end
-    end
+local tradingTweaks_getSellPrice = TradingManager.getSellPrice
+function TradingManager:getSellPrice(goodName, buyingFaction)
+    local price, basePrice = tradingTweaks_getSellPrice(self, goodName, buyingFaction)
+    if not basePrice then return price end
 
     local tradingStationFactor = 1
     if self.goodsMargins then
         tradingStationFactor = self.goodsMargins[goodName] or 1
     end
 
-    local price = round(good.price * relationFactor * factor * self.sellPriceFactor * tradingStationFactor)
-    local basePrice = round(good.price * self.sellPriceFactor * tradingStationFactor)
-
-    return price, basePrice
+    return round(price * tradingStationFactor), round(basePrice * tradingStationFactor)
 end
 
 local tradingTweaks_CreateNamespace = PublicNamespace.CreateNamespace
@@ -229,18 +128,17 @@ function TradingManager:updateBoughtGoodGui(index, good, price, _, isOptional) -
 
     local entity = Entity()
     if player.index == entity.factionIndex or player.allianceIndex == entity.factionIndex then
-        line.button.active = true
         if line.configBtn then
             line.button.upper = vec2(PublicNamespace.tabbedWindow.upper.x - 70, line.button.upper.y)
         end
     else
-        line.button.active = self.buyFromOthers
         if line.configBtn then
             line.swapBtn.visible = false
             line.configBtn.visible = false
             line.button.upper = vec2(PublicNamespace.tabbedWindow.upper.x, line.button.upper.y)
         end
     end
+    line.button.active = self.buyFromOthers
 end
 
 local tradingTweaks_updateSoldGoodGui = TradingManager.updateSoldGoodGui
@@ -254,18 +152,17 @@ function TradingManager:updateSoldGoodGui(index, good, price)
     local player = Player()
     local entity = Entity()
     if player.index == entity.factionIndex or player.allianceIndex == entity.factionIndex then
-        line.button.active = true
         if line.configBtn then
             line.button.upper = vec2(PublicNamespace.tabbedWindow.upper.x - 70, line.button.upper.y)
         end
     else
-        line.button.active = self.sellToOthers
         if line.configBtn then
             line.swapBtn.visible = false
             line.configBtn.visible = false
             line.button.upper = vec2(PublicNamespace.tabbedWindow.upper.x, line.button.upper.y)
         end
     end
+    line.button.active = self.sellToOthers
 end
 
 function TradingManager:onBuyTextEntered(textBox) -- overridden
@@ -537,73 +434,6 @@ function PublicNamespace.CreateTabbedWindow(caption, width)
     menu:registerWindow(PublicNamespace.window, "Trade Goods"%_t);
 
     return PublicNamespace.tabbedWindow
-end
-
-
-else -- onServer
-
-
-local tradingTweaks_sellToShip = TradingManager.sellToShip
-function TradingManager:sellToShip(shipIndex, goodName, amount, noDockCheck)
-    if not self.sellToOthers then
-        local shipFaction = getInteractingFactionByShip(shipIndex, callingPlayer, AlliancePrivilege.SpendResources)
-        if not shipFaction then return end
-
-        local entity = Entity()
-        if callingPlayer then
-            local player = Player(callingPlayer)
-            if player.index ~= entity.factionIndex and player.allianceIndex ~= entity.factionIndex then
-                player:sendChatMessage("", 1, "The station doesn't sell goods right now."%_t)
-                return
-            end
-        elseif shipFaction.index ~= entity.factionIndex then
-            return
-        end
-    end
-    if callingPlayer then
-        noDockCheck = false -- no cheating
-        -- no trading if faction relations are lower than certain threshold
-        if self.namespace and self.namespace.interactionPossible then
-            if not self.namespace.interactionPossible(callingPlayer) then
-                Player(callingPlayer):sendChatMessage("", 1, "Our records say that we're not allowed to do business with you.\n\nCome back when your relations to our faction are better."%_t)
-                return
-            end
-        end
-    end
-    
-
-    tradingTweaks_sellToShip(self, shipIndex, goodName, amount, noDockCheck)
-end
-
-local tradingTweaks_buyFromShip = TradingManager.buyFromShip
-function TradingManager:buyFromShip(shipIndex, goodName, amount, noDockCheck)
-    if not self.buyFromOthers then
-        local shipFaction = getInteractingFactionByShip(shipIndex, callingPlayer, AlliancePrivilege.SpendResources)
-        if not shipFaction then return end
-
-        local entity = Entity()
-        if callingPlayer then
-            local player = Player(callingPlayer)
-            if player.index ~= entity.factionIndex and player.allianceIndex ~= entity.factionIndex then
-                player:sendChatMessage("", 1, "The station doesn't buy goods right now."%_t)
-                return
-            end
-        elseif shipFaction.index ~= entity.factionIndex then
-            return
-        end
-    end
-    if callingPlayer then
-        noDockCheck = false -- no cheating
-        -- no trading if faction relations are lower than certain threshold
-        if self.namespace and self.namespace.interactionPossible then
-            if not self.namespace.interactionPossible(callingPlayer) then
-                Player(callingPlayer):sendChatMessage("", 1, "Our records say that we're not allowed to do business with you.\n\nCome back when your relations to our faction are better."%_t)
-                return
-            end
-        end
-    end
-
-    tradingTweaks_buyFromShip(self, shipIndex, goodName, amount, noDockCheck)
 end
 
 

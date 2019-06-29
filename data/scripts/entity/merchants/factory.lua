@@ -22,16 +22,6 @@ if tradingTweaks_isModified then
 end
 
 
-local tradingTweaks_setConfig = Factory.setConfig
-function Factory.setConfig(config) -- fix price margin exploit
-    if not config then return end
-
-    config.priceFactor = math.max(0.5, math.min(1.5, config.priceFactor))
-
-    tradingTweaks_setConfig(config)
-end
-
-
 if TradingTweaksConfig.OptionalGoodsBonus > 0 then -- only if boosting production with optional goods is enabled
 
     local tradingTweaks_restore = Factory.restore

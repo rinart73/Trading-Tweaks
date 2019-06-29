@@ -45,14 +45,6 @@ msgstr ""
 
 # ==========mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua ==========
 #:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
-msgid "The station doesn't sell goods right now."
-msgstr ""
-
-#:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
-msgid "The station doesn't buy goods right now."
-msgstr ""
-
-#:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
 msgid " (Optional)"
 msgstr ""
 
