@@ -4,10 +4,11 @@ if onServer() then
 include("utility")
 
 function Traders.update(timeStep) -- overridden
+    local sector = Sector()
+    if sector:getValue("war_zone") then return end
 
     -- find all stations that buy or sell goods
     local scripts = TradingUtility.getTradeableScripts()
-    local sector = Sector()
 
     local tradingStations = {}
 

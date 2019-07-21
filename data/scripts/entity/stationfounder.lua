@@ -1,10 +1,14 @@
+local SectorGenerator -- includes
+local tradingTweaks_generator -- server
+local tradingTweaks_transformToStation -- overridden functions
+
 if onServer() then
 
 
-local SectorGenerator = include("SectorGenerator")
-local tradingTweaks_generator = SectorGenerator(Sector():getCoordinates())
+SectorGenerator = include("SectorGenerator")
+tradingTweaks_generator = SectorGenerator(Sector():getCoordinates())
 
-local tradingTweaks_transformToStation = StationFounder.transformToStation
+tradingTweaks_transformToStation = StationFounder.transformToStation
 function StationFounder.transformToStation(buyer)
     local station = tradingTweaks_transformToStation(buyer)
     if station then
