@@ -63,6 +63,8 @@ function Traders.update(timeStep) -- overridden
     local tradingPossibilities = {}
     local tradingWeights = {}
 
+    local x, y = sector:getCoordinates()
+
     for _, v in pairs(tradingStations) do
         local station = v.station
         local bought = v.bought
@@ -82,7 +84,22 @@ function Traders.update(timeStep) -- overridden
         for _, name in pairs(bought) do
             local err, amount, maxAmount, _, buyPriceFactor = station:invokeFunction(script, "getStock", name)
             if err == 0 and maxAmount > 0 and amount / maxAmount < 0.4 then
-                tradingPossibilities[#tradingPossibilities+1] = { tradeType = TradingUtility.TradeType.SellToStation, station = station, script = script, name = name, amount = maxAmount - amount }
+            
+                local amountTraded = maxAmount - amount
+                if TradingUtility.isScriptAConsumer(script) then
+                    if station.playerOwned or station.allianceOwned then
+                        local g = goods[name]
+                        if not g then
+                            print ("invalid good: '" .. name .. "'")
+                            return
+                        end
+
+                        local maxValue = Balancing_GetSectorRichnessFactor(x, y, 1500000)
+                        amountTraded = math.min(amountTraded, math.max(2, math.ceil(maxValue / g.price)))
+                    end
+                end
+            
+                tradingPossibilities[#tradingPossibilities+1] = { tradeType = TradingUtility.TradeType.SellToStation, station = station, script = script, name = name, amount = amountTraded }
                 tradingWeights[#tradingWeights+1] = lerp(buyPriceFactor, 0.5, 1.5, 0.3, 1.0)
             end
         end
