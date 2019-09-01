@@ -110,6 +110,7 @@ function TradingManager:updateBoughtGoodGui(index, good, price, _, isOptional) -
     else
         line.name.caption = good:displayName(100)
     end
+    line.name.color = TradingManager:tradingTweaks_getGoodColor(good)
     line.stock.caption = amount .. "/" .. maxAmount
     line.price.caption = createMonetaryString(price)
     line.size.caption = round(good.size, 2)
@@ -148,6 +149,8 @@ function TradingManager:updateSoldGoodGui(index, good, price)
     if not line then return end
 
     tradingTweaks_updateSoldGoodGui(self, index, good, price)
+
+    line.name.color = TradingManager:tradingTweaks_getGoodColor(good)
 
     local player = Player()
     local entity = Entity()
@@ -409,6 +412,22 @@ function TradingManager:updateSoldGoodAmount(index) -- overridden
             self:updateSoldGoodGui(line, good, self:getSellPrice(good.name, player.index))
         end
     end
+end
+
+function TradingManager:tradingTweaks_getGoodColor(good)
+    if good.dangerous then
+        return ColorRGB(1, 0, 0)
+    end
+    if good.illegal then
+        return ColorRGB(1, 0.443, 0)
+    end
+    if good.stolen then
+        return ColorRGB(1, 0.721, 0)
+    end
+    if good.suspicious then
+        return ColorRGB(1, 1, 0)
+    end
+    return ColorRGB(1, 1, 1)
 end
 
 function PublicNamespace.CreateTabbedWindow(caption, width)

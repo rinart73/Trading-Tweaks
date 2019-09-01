@@ -38,13 +38,14 @@ function getFactoryUpgradeCost(production, size)
         end
     end
 
-    for _, garbage in pairs(production.garbages) do
-        local good = goods[garbage.name]
-        resultValue = resultValue + good.price * garbage.amount * 0.5
-    end
     for _, result in pairs(production.results) do
         local good = goods[result.name]
         resultValue = resultValue + good.price * result.amount
+    end
+    -- factor in garbage results as well
+    for _, result in pairs(production.garbages) do
+        local good = goods[result.name]
+        resultValue = resultValue + good.price * result.amount * 0.5
     end
 
     local diff = resultValue - ingredientValue
