@@ -1,771 +1,467 @@
 include("goods")
-local Azimuth = include("azimuthlib-basic")
 
-local tradingTweaks_configOptions = {
-  _version = {default = "0.1", comment = "Config version. Don't touch."},
-  LogLevel = {default = 2, min = 0, max = 4, format = "floor", comment = "0 - Disable, 1 - Errors, 2 - Warnings, 3 - Info, 4 - Debug."}
-}
-if onServer() then
-    tradingTweaks_configOptions = {
-      _version = {default = "0.1", comment = "Config version. Don't touch."},
-      LogLevel = {default = 2, min = 0, max = 4, format = "floor", comment = "0 - Disable, 1 - Errors, 2 - Warnings, 3 - Info, 4 - Debug."},
-      OptionalGoodsBonus = { default = 0.1, min = 0, max = 1, comment = "How much having optional goods buffs factory production output (0.1 = 10%)." }
-    }
-end
-local TradingTweaksConfig, tradingTweaks_isModified = Azimuth.loadConfig("TradingTweaks", tradingTweaks_configOptions)
-if tradingTweaks_isModified then
-    Azimuth.saveConfig("TradingTweaks", TradingTweaksConfig, tradingTweaks_configOptions)
-end
-local TradingTweaksLog = Azimuth.logs("TradingTweaks", TradingTweaksConfig.LogLevel)
+local Azimuth, TradingTweaksConfig = unpack(include("tradingtweaksinit"))
+local tradingTweaks_tabbedWindow, tradingTweaks_addSoldGood, tradingTweaks_toggleSellButton, tradingTweaks_addBoughtGood, tradingTweaks_configTab, tradingTweaks_basePriceLabel, tradingTweaks_basePriceSlider, tradingTweaks_statsLabels -- UI
+local tradingTweaks_allowedGoods, tradingTweaks_allowedToChange -- client
+local tradingTweaks_initUI, tradingTweaks_onShowWindow, tradingTweaks_buildBuyGui, tradingTweaks_buildSellGui, tradingTweaks_refreshUI, tradingTweaks_refreshConfigUI -- extended client functions
+local tradingTweaks_useUpBoughtGoods -- extended server functions
 
-
-TradingPost.trader.tax = 0 -- no tax for players
-TradingPost.trader.factionPaymentFactor = 1.0 -- players pay when trading station buys goods
 
 if onClient() then
 
 
-local tradingTweaks
-local tradingTweaks_configTab, tradingTweaks_allowBuyCheckBox, tradingTweaks_allowSellCheckBox, tradingTweaks_addGoodComboBox, tradingTweaks_goodConfigWindow, tradingTweaks_goodComboBox, tradingTweaks_marginLabel, tradingTweaks_marginSlider
-local tradingTweaks_boughtLineByConfigBtn = {}
-local tradingTweaks_soldLineByConfigBtn = {}
-local tradingTweaks_boughtLineBySwapBtn = {}
-local tradingTweaks_soldLineBySwapBtn = {}
-local tradingTweaks_indexByGood = {}
-local tradingTweaks_goodByIndex = {}
-local tradingTweaks_currentGood = {}
+include("azimuthlib-uiproportionalsplitter")
 
-local function tradingTweaks_getAddGoodName()
-    local goodName = tradingTweaks_goodByIndex[tradingTweaks_addGoodComboBox.selectedIndex+1]
-    if not goodName then
-        TradingTweaksLog.Error("onGoodChanged - good doesn't exist")
-        return
-    end
-    -- Check if good already exists
-    local found = false
-    for _, good in pairs(TradingPost.trader.boughtGoods) do
-        if good.name == goodName then
-            found = true
-            break
+-- PREDEFINED --
+
+tradingTweaks_initUI = TradingPost.initUI
+function TradingPost.initUI(...)
+    local fobidden = { ["Iron Ore"] = true, ["Titanium Ore"] = true, ["Naonite Ore"] = true, ["Trinium Ore"] = true, ["Xanion Ore"] = true, ["Ogonite Ore"] = true, ["Avorion Ore"] = true, ["Scrap Iron"] = true, ["Scrap Titanium"] = true, ["Scrap Naonite"] = true, ["Scrap Trinium"] = true, ["Scrap Xanion"] = true, ["Scrap Ogonite"] = true, ["Scrap Avorion"] = true }
+    tradingTweaks_allowedGoods = {}
+    for i, good in ipairs(goodsArray) do
+        if not good.illegal and not fobidden[good.name] then
+            tradingTweaks_allowedGoods[#tradingTweaks_allowedGoods+1] = good:good()
         end
     end
-    if not found then
-        for _, good in pairs(TradingPost.trader.soldGoods) do
-            if good.name == goodName then
-                found = true
-                break
-            end
-        end
-    end
-    if found then -- can't change, already exists
-        displayChatMessage("The station already sells/buys this type of good."%_t, "", 1)
-        return
-    end
-    return goodName
-end
+    table.sort(tradingTweaks_allowedGoods, function(a, b) return a:displayName(1) < b:displayName(1) end)
 
-local tradingTweaks_receiveGoods = TradingPost.trader.receiveGoods
-function TradingPost.trader:receiveGoods(buyFactor, sellFactor, boughtGoods_in, soldGoods_in, policies_in, tradingTweaks_in)
-    if tradingTweaks_in then
-        tradingTweaks = tradingTweaks_in
-        self.buyFromOthers = tradingTweaks.buyFromOthers
-        self.sellToOthers = tradingTweaks.sellToOthers
-        self.goodsMargins = tradingTweaks.goodsMargins
-        if tradingTweaks_allowBuyCheckBox then
-            tradingTweaks_allowBuyCheckBox:setCheckedNoCallback(tradingTweaks.buyFromOthers)
-            tradingTweaks_allowSellCheckBox:setCheckedNoCallback(tradingTweaks.sellToOthers)
-        end
-    end
+    tradingTweaks_tabbedWindow = TradingAPI.CreateTabbedWindow("Trading Post"%_t, 985)
 
-    -- hide removed lines
-    local endLine = math.min(15, TradingPost.trader.numBought)
-    for i = #boughtGoods_in, endLine do
-        TradingPost.trader.boughtLines[i]:hide()
-    end
-    endLine = math.min(15, TradingPost.trader.numSold)
-    for i = #soldGoods_in, endLine do
-        TradingPost.trader.soldLines[i]:hide()
-    end
+    tradingTweaks_initUI(...)
 
-    tradingTweaks_receiveGoods(self, buyFactor, sellFactor, boughtGoods_in, soldGoods_in, policies_in)
-end
-
-function TradingPost.trader:buildGui(window, guiType) -- overridden
-    local buttonCaption = ""
-    local buttonCallback = ""
-    local textCallback = ""
-    local swapCallback = ""
-    local configCallback = ""
-
-    if guiType == 1 then
-        buttonCaption = "Buy"%_t
-        buttonCallback = "onBuyButtonPressed"
-        textCallback = "onBuyTextEntered"
-        swapCallback = "tradingTweaks_onBuySwapButtonPressed"
-        configCallback = "tradingTweaks_onBuyConfigButtonPressed"
-    else
-        buttonCaption = "Sell"%_t
-        buttonCallback = "onSellButtonPressed"
-        textCallback = "onSellTextEntered"
-        swapCallback = "tradingTweaks_onSellSwapButtonPressed"
-        configCallback = "tradingTweaks_onSellConfigButtonPressed"
-    end
-
-    local size = window.size
-
-    local pictureX = 270
-    local nameX = 10
-    local stockX = 310
-    local volX = 460
-    local priceX = 530
-    local youX = 630
-    local textBoxX = 720
-    local buttonX = 790
-
-    local buttonSize = 70
-
-    -- header
-    window:createLabel(vec2(nameX, 0), "Name"%_t, 15)
-    window:createLabel(vec2(stockX, 0), "Stock"%_t, 15)
-    window:createLabel(vec2(priceX, 0), "Cr"%_t, 15)
-    window:createLabel(vec2(volX, 0), "Vol"%_t, 15)
-
-    if guiType == 1 then
-        window:createLabel(vec2(youX, 0), "Max"%_t, 15)
-    else
-        window:createLabel(vec2(youX, 0), "You"%_t, 15)
-    end
-
-    local y = 25
-    for i = 1, 15 do
-
-        local yText = y + 6
-
-        local frame = window:createFrame(Rect(0, y, textBoxX - 10, 30 + y))
-
-        local icon = window:createPicture(Rect(pictureX, yText - 5, 29 + pictureX, 29 + yText - 5), "")
-        local nameLabel = window:createLabel(vec2(nameX, yText), "", 15)
-        local stockLabel = window:createLabel(vec2(stockX, yText), "", 15)
-        local priceLabel = window:createLabel(vec2(priceX, yText), "", 15)
-        local sizeLabel = window:createLabel(vec2(volX, yText), "", 15)
-        local youLabel = window:createLabel(vec2(youX, yText), "", 15)
-        local numberTextBox = window:createTextBox(Rect(textBoxX, yText - 6, 60 + textBoxX, 30 + yText - 6), textCallback)
-        local button = window:createButton(Rect(buttonX, yText - 6, window.size.x - 70, 30 + yText - 6), buttonCaption, buttonCallback)
-        local swapBtn = window:createButton(Rect(window.size.x - 60, yText - 6, window.size.x - 35, 30 + yText - 6), "", swapCallback)
-        local configBtn = window:createButton(Rect(window.size.x - 25, yText - 6, window.size.x, 30 + yText - 6), "", configCallback)
-
-        button.maxTextSize = 16
-
-        swapBtn.icon = "data/textures/icons/tradingtweaks/back-forth-mini.png"
-        swapBtn.tooltip = "Moves good from sold to bought and vice versa."%_t
-
-        configBtn.icon = "data/textures/icons/tradingtweaks/cog-mini.png"
-
-        numberTextBox.text = "0"
-        numberTextBox.allowedCharacters = "0123456789"
-        numberTextBox.clearOnClick = 1
-
-        icon.isIcon = 1
-
-        local show = function (self)
-            self.icon.visible = true
-            self.frame.visible = true
-            self.name.visible = true
-            self.stock.visible = true
-            self.price.visible = true
-            self.size.visible = true
-            self.number.visible = true
-            self.button.visible = true
-            self.swapBtn.visible = true
-            self.configBtn.visible = true
-            self.you.visible = true
-        end
-        local hide = function (self)
-            self.icon.visible = false
-            self.frame.visible = false
-            self.name.visible = false
-            self.stock.visible = false
-            self.price.visible = false
-            self.size.visible = false
-            self.number.visible = false
-            self.button.visible = false
-            self.swapBtn.visible = false
-            self.configBtn.visible = false
-            self.you.visible = false
-        end
-
-        local line = {icon = icon, frame = frame, name = nameLabel, stock = stockLabel, price = priceLabel, you = youLabel, size = sizeLabel, number = numberTextBox, button = button, swapBtn = swapBtn, configBtn = configBtn, show = show, hide = hide}
-        line:hide()
-
-        if guiType == 1 then
-            self.soldLines[#self.soldLines+1] = line
-            tradingTweaks_soldLineByConfigBtn[configBtn.index] = i
-            tradingTweaks_soldLineBySwapBtn[swapBtn.index] = i
-        else
-            self.boughtLines[#self.boughtLines+1] = line
-            tradingTweaks_boughtLineByConfigBtn[configBtn.index] = i
-            tradingTweaks_boughtLineBySwapBtn[swapBtn.index] = i
-        end
-
-        y = y + 35
-    end
-end
-
-local tradingTweaks_initUI = TradingPost.initUI
-function TradingPost.initUI()
-    local tabbedWindow = TradingAPI.CreateTabbedWindow("Trading Post"%_t, 985)
-
-    tradingTweaks_initUI()
-
-    tradingTweaks_configTab = tabbedWindow:createTab("Configure"%_t, "data/textures/icons/cog.png", "Station configuration"%_t)
+    tradingTweaks_configTab = tradingTweaks_tabbedWindow:createTab("Configure"%_t, "data/textures/icons/cog.png", "Station configuration"%_t)
     TradingPost.tradingTweaks_buildConfigUI(tradingTweaks_configTab)
-
-    local menu = ScriptUI()
-    local res = getResolution()
-    local size = vec2(400, 220)
-    tradingTweaks_goodConfigWindow = menu:createWindow(Rect(res * 0.5 - size * 0.5, res * 0.5 + size * 0.5))
-    tradingTweaks_goodConfigWindow.caption = "Good Settings"%_t
-    tradingTweaks_goodConfigWindow.showCloseButton = 1
-    tradingTweaks_goodConfigWindow.moveable = 1
-    tradingTweaks_goodConfigWindow.visible = false
-    
-    local lister = UIVerticalLister(Rect(10, 10, size.x - 10, size.y - 10), 5, 0)
-
-    local label = tradingTweaks_goodConfigWindow:createLabel(Rect(), "Change good"%_t, 12)
-    lister:placeElementTop(label)
-    label.centered = true
-
-    lister:nextRect(5)
-
-    tradingTweaks_goodComboBox = tradingTweaks_goodConfigWindow:createComboBox(Rect(), "tradingTweaks_onGoodChanged")
-    local i = 1
-    for _, good in Azimuth.orderedPairs(goodsArray, function(t, a, b) return t[a].name%_t < t[b].name%_t end) do
-        tradingTweaks_goodComboBox:addEntry(good.name%_t)
-        i = i + 1
-    end
-    lister:placeElementTop(tradingTweaks_goodComboBox)
-
-    lister:nextRect(10)
-    
-    tradingTweaks_marginLabel = tradingTweaks_goodConfigWindow:createLabel(Rect(), "Buy/Sell price margin %"%_t, 12)
-    lister:placeElementTop(tradingTweaks_marginLabel)
-    tradingTweaks_marginLabel.centered = true
-    tradingTweaks_marginLabel.tooltip = "Sets the price margin of goods bought and sold by this station. Low prices attract more buyers, high prices attract more sellers."%_t
-
-    tradingTweaks_marginSlider = tradingTweaks_goodConfigWindow:createSlider(Rect(), -50, 50, 100, "", "tradingTweaks_onGoodMarginChanged")
-    lister:placeElementTop(tradingTweaks_marginSlider)
-    tradingTweaks_marginSlider:setValueNoCallback(0)
-    tradingTweaks_marginSlider.unit = "%"
-
-    lister:nextRect(25)
-    
-    local btn = tradingTweaks_goodConfigWindow:createButton(Rect(0, 0, 200, 30), "Remove"%_t, "tradingTweaks_onGoodRemove")
-    lister:placeElementTop(btn)
 end
 
-local tradingTweaks_onShowWindow = TradingPost.onShowWindow
-function TradingPost.onShowWindow(optionIndex)
-    tradingTweaks_onShowWindow()
+tradingTweaks_onShowWindow = TradingPost.onShowWindow
+function TradingPost.onShowWindow(...)
+    tradingTweaks_onShowWindow(...)
 
-    if tradingTweaks_configTab then
-        local player = Player()
-        local faction = Faction()
-        if player.index == faction.index or player.allianceIndex == faction.index then
-            TradingAPI.tabbedWindow:activateTab(tradingTweaks_configTab)
+    tradingTweaks_allowedToChange = checkEntityInteractionPermissions(Entity(), AlliancePrivilege.ManageStations)
+
+    if tradingTweaks_allowedToChange then
+        tradingTweaks_addSoldGood.visible = true
+        tradingTweaks_toggleSellButton.visible = true
+        tradingTweaks_addBoughtGood.visible = true
+        TradingPost.toggleBuyButton.visible = true
+        tradingTweaks_tabbedWindow:activateTab(tradingTweaks_configTab)
+    else
+        tradingTweaks_addSoldGood.visible = false
+        tradingTweaks_toggleSellButton.visible = false
+        tradingTweaks_addBoughtGood.visible = false
+        TradingPost.toggleBuyButton.visible = false
+        tradingTweaks_tabbedWindow:deactivateTab(tradingTweaks_configTab)
+    end
+end
+
+-- FUNCTIONS --
+
+tradingTweaks_buildBuyGui = TradingPost.trader.buildBuyGui
+function TradingPost.trader:buildBuyGui(buyTab, ...)
+    tradingTweaks_buildBuyGui(self, buyTab, ...)
+
+    TradingPost.tradingTweaks_buildModGui(buyTab, 1)
+
+    tradingTweaks_addSoldGood = buyTab:createButton(Rect(buyTab.size.x - 65, -5, buyTab.size.x - 35, 25), "", "tradingTweaks_onAddSoldGood")
+    tradingTweaks_addSoldGood.icon = "data/textures/icons/plus.png"
+    tradingTweaks_addSoldGood.tooltip = "Add good"%_t
+
+    tradingTweaks_toggleSellButton = buyTab:createButton(Rect(buyTab.size.x - 30, -5, buyTab.size.x, 25), "", "tradingTweaks_onToggleSellPressed")
+    tradingTweaks_toggleSellButton.icon = "data/textures/icons/buy.png"
+end
+
+tradingTweaks_buildSellGui = TradingPost.trader.buildSellGui
+function TradingPost.trader:buildSellGui(sellTab, ...)
+    tradingTweaks_buildSellGui(self, sellTab, ...)
+
+    TradingPost.tradingTweaks_buildModGui(sellTab, 0)
+
+    tradingTweaks_addBoughtGood = sellTab:createButton(Rect(sellTab.size.x - 65, -5, sellTab.size.x - 35, 25), "", "tradingTweaks_onAddBoughtGood")
+    tradingTweaks_addBoughtGood.icon = "data/textures/icons/plus.png"
+    tradingTweaks_addBoughtGood.tooltip = "Add good"%_t
+end
+
+tradingTweaks_refreshUI = TradingPost.trader.refreshUI
+function TradingPost.trader:refreshUI(...)
+    local player = Player()
+    local playerCraft = player.craft
+    if not playerCraft then return end
+
+    tradingTweaks_refreshUI(self, ...)
+
+    if not self.guiInitialized then return end
+
+    for i, line in ipairs(self.soldLines) do
+        local good = self.soldGoods[i]
+        if good then
+            line.tradingTweaks_selectGood:setSelectedValueNoCallback(good.name)
         else
-            TradingAPI.tabbedWindow:deactivateTab(tradingTweaks_configTab)
+            line:hide()
         end
     end
+    for i, line in ipairs(self.boughtLines) do
+        local good = self.boughtGoods[i]
+        if good then
+            line.tradingTweaks_selectGood:setSelectedValueNoCallback(good.name)
+        else
+            line:hide()
+        end
+    end
+
+    tradingTweaks_addSoldGood.active = #self.soldGoods < 15
+    tradingTweaks_addBoughtGood.active = #self.boughtGoods < 15
+
+    tradingTweaks_basePriceSlider:setValueNoCallback(round((self.buyPriceFactor - 1.0) * 100.0))
+    tradingTweaks_basePriceLabel.tooltip = "This station will buy and sell its goods for ${percentage}% of the normal price."%_t % {percentage = round(self.buyPriceFactor * 100.0)}
+
+    -- stats
+    tradingTweaks_statsLabels[1].left.caption = "Money spent"%_t
+    tradingTweaks_statsLabels[1].right.caption = "${c}${money}"%_t % {c = credits(), money = createMonetaryString(self.stats.moneySpentOnGoods)}
+    tradingTweaks_statsLabels[1].left.tooltip = "Amount of money spent on purchasing goods"%_t
+
+    tradingTweaks_statsLabels[2].left.caption = "Money gained"%_t
+    tradingTweaks_statsLabels[2].right.caption = "${c}${money}"%_t % {c = credits(), money = createMonetaryString(self.stats.moneyGainedFromGoods)}
+    tradingTweaks_statsLabels[2].left.tooltip = "Amount of money gained by selling products."%_t
+
+    tradingTweaks_statsLabels[4].left.caption = "Profit"%_t
+    tradingTweaks_statsLabels[4].right.caption = "${c}${money}"%_t % {c = credits(), money = createMonetaryString(self.stats.moneyGainedFromGoods + self.stats.moneyGainedFromTax - self.stats.moneySpentOnGoods)}
+    tradingTweaks_statsLabels[4].left.tooltip = "Total profit of the station; (sales - purchases)."%_t
 end
 
-local tradingTweaks_onCloseWindow = TradingPost.onCloseWindow
-function TradingPost.onCloseWindow()
-    if tradingTweaks_onCloseWindow then tradingTweaks_onCloseWindow() end
+tradingTweaks_refreshConfigUI = TradingPost.refreshConfigUI
+function TradingPost.refreshConfigUI(...)
+    tradingTweaks_refreshConfigUI(...)
 
-    tradingTweaks_goodConfigWindow.visible = false
+    if TradingPost.trader.sellToOthers then
+        tradingTweaks_toggleSellButton.icon = "data/textures/icons/tradingtweaks/buy-enabled.png"
+        tradingTweaks_toggleSellButton.tooltip = "This station resells bought goods to traders."%_t
+    else
+        tradingTweaks_toggleSellButton.icon = "data/textures/icons/tradingtweaks/buy-disabled.png"
+        tradingTweaks_toggleSellButton.tooltip = "This station doesn't resell bought goods to traders."%_t
+    end
+end
+
+function TradingPost.sendConfig() -- overridden
+    invokeServerFunction("setConfig", {
+      buyFromOthers = TradingPost.trader.buyFromOthers,
+      sellToOthers = TradingPost.trader.sellToOthers,
+      priceFactor = 1.0 + tradingTweaks_basePriceSlider.value / 100.0
+    })
 end
 
 function TradingPost.tradingTweaks_buildConfigUI(tab)
-    local vsplit = UIVerticalSplitter(Rect(5, 5, tab.size.x - 5, tab.size.y - 5), 20, 0, 0.5)
-    lister = UIVerticalLister(vsplit.left, 5, 0)
+    local splitter = UIVerticalProportionalSplitter(Rect(tab.size), 30, 0, {0.5, 270})
 
-    tradingTweaks_allowBuyCheckBox = tab:createCheckBox(Rect(), "Buy goods from others"%_t, "tradingTweaks_onSettingsChanged")
-    lister:placeElementTop(tradingTweaks_allowBuyCheckBox)
-    tradingTweaks_allowBuyCheckBox.tooltip = "If checked, the station will buy goods from traders from other factions than you."%_t
+    local lister = UIVerticalLister(splitter[1], 10, 0)
+    local vSplitter = UIVerticalSplitter(lister:placeCenter(vec2(lister.inner.width, 40)), 10, 0, 0.30)
+    tradingTweaks_basePriceLabel = tab:createLabel(vSplitter.left, "Base Price %"%_t, 13)
+    tradingTweaks_basePriceLabel:setCenterAligned()
+    tradingTweaks_basePriceSlider = tab:createSlider(vSplitter.right, -10, 10, 20, "", "sendConfig")
+    tradingTweaks_basePriceSlider:setValueNoCallback(0)
+    tradingTweaks_basePriceSlider.unit = "%"
+    tradingTweaks_basePriceSlider.tooltip = "Sets the base price of goods bought and sold by this station. A low base price attracts more buyers and a high base price attracts more sellers."%_t
 
-    tradingTweaks_allowSellCheckBox = tab:createCheckBox(Rect(), "Sell goods to others"%_t, "tradingTweaks_onSettingsChanged")
-    lister:placeElementTop(tradingTweaks_allowSellCheckBox)
-    tradingTweaks_allowSellCheckBox.tooltip = "If checked, the station will sell goods to traders from other factions than you."%_t
+    -- stats
+    local rect = splitter[2]
+    rect.upper = vec2(rect.upper.x, rect.lower.y + 74)
+    tab:createFrame(rect)
+    local lister = UIVerticalLister(splitter[2], 4, 10)
+    tradingTweaks_statsLabels = {}
+    for i = 1, 4 do
+        local rect = lister:nextRect(10)
+        if i ~= 3 then
+            local left = tab:createLabel(rect, "", 11)
+            left:setLeftAligned()
+            left.font = FontType.Normal
 
-    lister = UIVerticalLister(vsplit.right, 5, 0)
+            local right = tab:createLabel(rect, "", 11)
+            right:setRightAligned()
+            right.font = FontType.Normal
 
-    tradingTweaks_addGoodComboBox = tab:createComboBox(Rect(), "")
-    local i = 1
-    for _, good in Azimuth.orderedPairs(goodsArray, function(t, a, b) return t[a].name%_t < t[b].name%_t end) do
-        tradingTweaks_indexByGood[good.name] = i
-        tradingTweaks_goodByIndex[i] = good.name
-        tradingTweaks_addGoodComboBox:addEntry(good.name%_t)
-        i = i + 1
-    end
-    lister:placeElementTop(tradingTweaks_addGoodComboBox)
-
-    lister:nextRect(10)
-    
-    local btn = tab:createButton(Rect(), "Add sold good"%_t, "tradingTweaks_onAddSoldGoodButtonPressed")
-    btn.maxTextSize = 16
-    lister:placeElementTop(btn)
-    btn = tab:createButton(Rect(), "Add bought good"%_t, "tradingTweaks_onAddBoughtGoodButtonPressed")
-    btn.maxTextSize = 16
-    lister:placeElementTop(btn)
-
-    if tradingTweaks then
-        tradingTweaks_allowBuyCheckBox:setCheckedNoCallback(tradingTweaks.buyFromOthers)
-        tradingTweaks_allowSellCheckBox:setCheckedNoCallback(tradingTweaks.sellToOthers)
-    end
-end
-
-function TradingPost.tradingTweaks_onBuySwapButtonPressed(button)
-    local line = tradingTweaks_soldLineBySwapBtn[button.index]
-    if not line then
-        TradingTweaksLog.Error("Sell swap button - good doesn't exist")
-        return
-    end
-    local goodIndex = TradingPost.trader.soldGoodIndexByLine[line]
-    if not goodIndex then
-        TradingTweaksLog.Error("Buy swap button - good doesn't exist")
-        return
-    end
-    local good = TradingPost.trader.soldGoods[goodIndex]
-    if not good then return end
-    if TradingPost.trader.numBought == 15 then
-        displayChatMessage("Reached the limits of 15 bought/sold goods."%_t, "", 1)
-        return
-    end
-
-    invokeServerFunction("tradingTweaks_swapGood", true, good.name)
-end
-
-function TradingPost.tradingTweaks_onSellSwapButtonPressed(button)
-    local line = tradingTweaks_boughtLineBySwapBtn[button.index]
-    if not line then
-        TradingTweaksLog.Error("Sell swap button - good doesn't exist")
-        return
-    end
-    local goodIndex = TradingPost.trader.boughtGoodIndexByLine[line]
-    if not goodIndex then
-        TradingTweaksLog.Error("Sell swap button - good doesn't exist")
-        return
-    end
-    local good = TradingPost.trader.boughtGoods[goodIndex]
-    if not good then return end
-    if TradingPost.trader.numSold == 15 then
-        displayChatMessage("Reached the limits of 15 bought/sold goods."%_t, "", 1)
-        return
-    end
-
-    invokeServerFunction("tradingTweaks_swapGood", false, good.name)
-end
-
-function TradingPost.tradingTweaks_onBuyConfigButtonPressed(button)
-    local line = tradingTweaks_soldLineByConfigBtn[button.index]
-    if not line then
-        TradingTweaksLog.Error("Buy config button - good doesn't exist")
-        return
-    end
-    local goodIndex = TradingPost.trader.soldGoodIndexByLine[line]
-    if not goodIndex then
-        TradingTweaksLog.Error("Buy config button - good doesn't exist")
-        return
-    end
-    local good = TradingPost.trader.soldGoods[goodIndex]
-    if not good then return end
-
-    tradingTweaks_currentGood = { sold = true, name = good.name }
-
-    tradingTweaks_goodComboBox:setSelectedIndexNoCallback(tradingTweaks_indexByGood[good.name]-1)
-
-    local factor = TradingPost.trader.goodsMargins[good.name] or 1
-    tradingTweaks_marginLabel.tooltip = "This station will buy and sell its goods for ${percentage}% of the normal price."%_t % {percentage = round(factor * 100.0)}
-    tradingTweaks_marginSlider:setValueNoCallback(round((factor - 1.0) * 100.0))
-
-    tradingTweaks_goodConfigWindow.visible = true
-end
-
-function TradingPost.tradingTweaks_onSellConfigButtonPressed(button)
-    local line = tradingTweaks_boughtLineByConfigBtn[button.index]
-    if not line then
-        TradingTweaksLog.Error("Sell config button - good doesn't exist")
-        return
-    end
-    local goodIndex = TradingPost.trader.boughtGoodIndexByLine[line]
-    if not goodIndex then
-        TradingTweaksLog.Error("Sell config button - good doesn't exist")
-        return
-    end
-    local good = TradingPost.trader.boughtGoods[goodIndex]
-    if not good then return end
-
-    tradingTweaks_currentGood = { sold = false, name = good.name }
-
-    tradingTweaks_goodComboBox:setSelectedIndexNoCallback(tradingTweaks_indexByGood[good.name]-1)
-
-    local factor = TradingPost.trader.goodsMargins[good.name] or 1
-    tradingTweaks_marginLabel.tooltip = "This station will buy and sell its goods for ${percentage}% of the normal price."%_t % {percentage = round(factor * 100.0)}
-    tradingTweaks_marginSlider:setValueNoCallback(round((factor - 1.0) * 100.0))
-
-    tradingTweaks_goodConfigWindow.visible = true
-end
-
-function TradingPost.tradingTweaks_onGoodChanged()
-    local goodName = tradingTweaks_goodByIndex[tradingTweaks_goodComboBox.selectedIndex+1]
-    if not goodName then
-        TradingTweaksLog.Error("onGoodChanged - good doesn't exist")
-        return
-    end
-    if tradingTweaks_currentGood.name == goodName then return end
-    -- Check if good already exists
-    local found = false
-    for _, good in pairs(TradingPost.trader.boughtGoods) do
-        if good.name == goodName then
-            found = true
-            break
+            tradingTweaks_statsLabels[i] = {left = left, right = right}
         end
     end
-    if not found then
-        for _, good in pairs(TradingPost.trader.soldGoods) do
-            if good.name == goodName then
-                found = true
-                break
+end
+
+function TradingPost.tradingTweaks_buildModGui(tab, guiType)
+    local goodLines, selectGoodCallback, removeGoodCallback
+    if guiType == 1 then
+        goodLines = TradingPost.trader.soldLines
+        selectGoodCallback = "tradingTweaks_onChangeSoldGood"
+        removeGoodCallback = "tradingTweaks_onRemoveSoldGood"
+    else
+        goodLines = TradingPost.trader.boughtLines
+        selectGoodCallback = "tradingTweaks_onChangeBoughtGood"
+        removeGoodCallback = "tradingTweaks_onRemoveBoughtGood"
+    end
+
+    for i, line in ipairs(goodLines) do
+        line.tradingTweaks_selectGood = tab:createValueComboBox(Rect(), selectGoodCallback)
+        line.tradingTweaks_selectGood.rect = Rect(line.name.position - vec2(10, 6), line.name.position + vec2(250, 24))
+        for _, good in ipairs(tradingTweaks_allowedGoods) do
+            line.tradingTweaks_selectGood:addEntry(good.name, good:displayName(100), good.color)
+        end
+
+        line.tradingTweaks_removeGoodBtn = tab:createButton(Rect(), "", removeGoodCallback)
+        line.tradingTweaks_removeGoodBtn.rect = Rect(line.button.upper - vec2(30, 30), line.button.upper)
+        line.tradingTweaks_removeGoodBtn.icon = "data/textures/icons/minus.png"
+        line.tradingTweaks_removeGoodBtn.tooltip = "Remove good"%_t
+
+        line.tradingTweaks_hide = line.hide
+        line.hide = function(self)
+            self:tradingTweaks_hide()
+            self.tradingTweaks_selectGood.visible = false
+            self.tradingTweaks_removeGoodBtn.visible = false
+        end
+
+        line.tradingTweaks_show = line.show
+        line.show = function(self)
+            self:tradingTweaks_show()
+
+            if tradingTweaks_allowedToChange then
+                self.name.visible = false
+                self.tradingTweaks_selectGood.visible = true
+                self.button.upper = self.tradingTweaks_removeGoodBtn.upper - vec2(35, 0)
+                self.tradingTweaks_removeGoodBtn.visible = true
+            else
+                self.name.visible = true
+                self.tradingTweaks_selectGood.visible = false
+                self.button.upper = self.tradingTweaks_removeGoodBtn.upper
+                self.tradingTweaks_removeGoodBtn.visible = false
+            end
+        end
+
+        line:hide()
+    end
+end
+
+function TradingPost.tradingTweaks_changeGood(tabType, comboBox, value)
+    local goodLines, stationGoods
+    if tabType == 1 then
+        goodLines = TradingPost.trader.soldLines
+        stationGoods = TradingPost.trader.soldGoods
+    else
+        goodLines = TradingPost.trader.boughtLines
+        stationGoods = TradingPost.trader.boughtGoods
+    end
+
+    local curName, invalid
+    for i, line in ipairs(goodLines) do
+        local good = stationGoods[i]
+        if good then
+            if line.tradingTweaks_selectGood.index == comboBox.index then
+                if good.name == value then return end -- no change
+                curName = good.name
+            elseif value == good.name then
+                invalid = true -- can't have the same good on multiple lines
+            end 
+        end
+    end
+    if curName then
+        if invalid then
+            comboBox:setSelectedValueNoCallback(curName) -- restore current good
+        else -- send request
+            invokeServerFunction("tradingTweaks_changeGood", tabType, curName, value)
+        end
+    end
+end
+
+function TradingPost.tradingTweaks_removeGood(tabType, btn)
+    local goodLines, stationGoods
+    if tabType == 1 then
+        goodLines = TradingPost.trader.soldLines
+        stationGoods = TradingPost.trader.soldGoods
+    else
+        goodLines = TradingPost.trader.boughtLines
+        stationGoods = TradingPost.trader.boughtGoods
+    end
+
+    for i, line in ipairs(goodLines) do
+        if line.tradingTweaks_removeGoodBtn.index == btn.index then
+            local good = stationGoods[i]
+            if good then
+                invokeServerFunction("tradingTweaks_removeGood", tabType, good.name)
+                return
             end
         end
     end
-    if found then -- can't change, already exists
-        tradingTweaks_goodComboBox:setSelectedIndexNoCallback(tradingTweaks_indexByGood[tradingTweaks_currentGood.name]-1)
-        displayChatMessage("The station already sells/buys this type of good."%_t, "", 1)
-        return
+end
+
+-- CALLABLE --
+
+function TradingPost.setConfig(config) -- overridden
+    -- apply config to UI elements
+    TradingPost.trader.buyFromOthers = config.buyFromOthers
+    TradingPost.trader.sellToOthers = config.sellToOthers
+    if config.buyPriceFactor then
+        TradingPost.trader.buyPriceFactor = config.buyPriceFactor
+        TradingPost.trader.sellPriceFactor = config.sellPriceFactor
     end
-    -- Hide window
-    tradingTweaks_goodConfigWindow.visible = false
-    -- Change goods
-    invokeServerFunction("tradingTweaks_changeGood", tradingTweaks_currentGood.sold, tradingTweaks_currentGood.name, goodName)
-end
 
-function TradingPost.tradingTweaks_onGoodMarginChanged()
-    local factor = 1.0 + tradingTweaks_marginSlider.value / 100.0
-    TradingPost.trader.goodsMargins[tradingTweaks_currentGood.name] = factor
-    tradingTweaks_marginLabel.tooltip = "This station will buy and sell its goods for ${percentage}% of the normal price."%_t % {percentage = round(factor * 100.0)}
-    TradingPost.tradingTweaks_onSettingsChanged()
-end
+    if TradingAPI.window.visible then
+        TradingPost.refreshConfigUI()
 
-function TradingPost.tradingTweaks_onGoodRemove()
-    tradingTweaks_goodConfigWindow.visible = false
-    invokeServerFunction("tradingTweaks_removeGood", tradingTweaks_currentGood.sold, tradingTweaks_currentGood.name)
-end
-
-function TradingPost.tradingTweaks_onAddBoughtGoodButtonPressed()
-    local goodName = tradingTweaks_getAddGoodName()
-    if goodName then
-        if TradingPost.trader.numBought == 15 then
-            displayChatMessage("Reached the limits of 15 bought/sold goods."%_t, "", 1)
-            return
+        if config.buyPriceFactor then -- no need for double refresh
+            TradingPost.trader:refreshUI()
         end
-        invokeServerFunction("tradingTweaks_addGood", true, goodName)
     end
 end
 
-function TradingPost.tradingTweaks_onAddSoldGoodButtonPressed()
-    local goodName = tradingTweaks_getAddGoodName()
-    if goodName then
-        if TradingPost.trader.numSold == 15 then
-            displayChatMessage("Reached the limits of 15 bought/sold goods."%_t, "", 1)
-            return
-        end
-        invokeServerFunction("tradingTweaks_addGood", false, goodName)
-    end
+-- CALLBACKS --
+
+function TradingPost.onToggleBuyPressed() -- overriden
+    TradingPost.trader.buyFromOthers = not TradingPost.trader.buyFromOthers
+    TradingPost.sendConfig()
 end
 
-function TradingPost.tradingTweaks_onSettingsChanged()
-    local config = {
-      buyFromOthers = tradingTweaks_allowBuyCheckBox.checked,
-      sellToOthers = tradingTweaks_allowSellCheckBox.checked,
-      goodsMargins = TradingPost.trader.goodsMargins
-    }
-    invokeServerFunction("tradingTweaks_setSettings", config)
+function TradingPost.tradingTweaks_onChangeSoldGood(comboBox, value, selectedIndex)
+    TradingPost.tradingTweaks_changeGood(1, comboBox, value)
+end
+
+function TradingPost.tradingTweaks_onChangeBoughtGood(comboBox, value, selectedIndex)
+    TradingPost.tradingTweaks_changeGood(0, comboBox, value)
+end
+
+function TradingPost.tradingTweaks_onRemoveSoldGood(btn)
+    TradingPost.tradingTweaks_removeGood(1, btn)
+end
+
+function TradingPost.tradingTweaks_onRemoveBoughtGood(btn)
+    TradingPost.tradingTweaks_removeGood(0, btn)
+end
+
+function TradingPost.tradingTweaks_onAddSoldGood()
+    invokeServerFunction("tradingTweaks_addGood", 1)
+end
+
+function TradingPost.tradingTweaks_onAddBoughtGood()
+    invokeServerFunction("tradingTweaks_addGood", 0)
+end
+
+function TradingPost.tradingTweaks_onToggleSellPressed()
+    TradingPost.trader.sellToOthers = not TradingPost.trader.sellToOthers
+    TradingPost.sendConfig()
 end
 
 
 else -- onServer
 
 
-function TradingPost.trader:sendGoods(playerIndex) -- overridden
-    if playerIndex then
-        local player = Player(playerIndex)
-        local tradingTweaks = { -- sync with client
-          buyFromOthers = self.buyFromOthers,
-          sellToOthers = self.sellToOthers,
-          goodsMargins = self.goodsMargins or {}
-        }
-        invokeClientFunction(player, "receiveGoods", self.buyPriceFactor, self.sellPriceFactor, self.boughtGoods, self.soldGoods, self.policies, tradingTweaks)
-    else
-        broadcastInvokeClientFunction("receiveGoods", self.buyPriceFactor, self.sellPriceFactor, self.boughtGoods, self.soldGoods, self.policies, tradingTweaks)
-    end
+-- FUNCTIONS --
+
+tradingTweaks_useUpBoughtGoods = TradingPost.trader.useUpBoughtGoods
+function TradingPost.trader:useUpBoughtGoods(...)
+    if not Entity().aiOwned and not TradingTweaksConfig.PlayerTradingPostsUseUpGoods then return end
+
+    tradingTweaks_useUpBoughtGoods(self, ...)
 end
 
-local tradingTweaks_secureTradingGoods = TradingPost.trader.secureTradingGoods
-function TradingPost.trader:secureTradingGoods()
-    local data = tradingTweaks_secureTradingGoods(self)
-
-    data.goodsMargins = self.goodsMargins
-    return data
+function TradingPost.trader:updateOrganizeGoodsBulletins() -- overridden
+    -- don't create Resource Shortage bulletins for Trading Posts
 end
 
-local tradingTweaks_restoreTradingGoods = TradingPost.trader.restoreTradingGoods
-function TradingPost.trader:restoreTradingGoods(data)
-    self.goodsMargins = data.goodsMargins or {}
-    if not Entity().aiOwned then
-        -- reset to normal
-        data.buyPriceFactor = 1
-        data.sellPriceFactor = 1
-        -- if player/alliance owns a trading station, turn off buying at first, so people will not lose money
-        local entity = Entity()
-        if entity:getValue("TradingTweaks") then
-            entity:setValue("TradingTweaks", true)
-            TradingPost.trader.buyFromOthers = false
-        end
-    end
+-- CALLABLE --
 
-    tradingTweaks_restoreTradingGoods(self, data)
+function TradingPost.sendConfig(full) -- overridden
+    local config = {
+      buyFromOthers = TradingPost.trader.buyFromOthers,
+      sellToOthers = TradingPost.trader.sellToOthers
+    }
+    if full then
+        config.buyPriceFactor = TradingPost.trader.buyPriceFactor
+        config.sellPriceFactor = TradingPost.trader.sellPriceFactor
+    end
+    -- read config from factory settings
+    invokeClientFunction(Player(callingPlayer), "setConfig", config)
 end
 
-local tradingTweaks_initialize = TradingPost.initialize
-function TradingPost.initialize()
-    local entity = Entity()
-    local goodsGenerated = entity:getValue("goods_generated")
+function TradingPost.setConfig(config) -- overridden
+    if not config then return end
+    local owner, station, player = checkEntityInteractionPermissions(Entity(), AlliancePrivilege.ManageStations)
+    if not owner then return end
 
-    tradingTweaks_initialize()
-
-    if not entity.aiOwned then 
-        TradingPost.trader.useUpGoodsEnabled = false -- don't consume goods
-        -- reset to normal
-        TradingPost.trader.buyPriceFactor = 1
-        TradingPost.trader.sellPriceFactor = 1
-        -- disable buying so people will not lose their money
-        if not goodsGenerated and not entity:getValue("TradingTweaks") then -- trading station was just created
-            entity:setValue("TradingTweaks", true)
-            TradingPost.trader.buyFromOthers = false
-            -- add margin tables for goods
-            if not TradingPost.trader.goodsMargins then TradingPost.trader.goodsMargins = {} end
-        end
+    if config.buyFromOthers ~= nil then
+        TradingPost.trader.buyFromOthers = config.buyFromOthers
+        TradingPost.buyingConfigured = true
     end
+    if config.sellToOthers ~= nil then
+        TradingPost.trader.sellToOthers = config.sellToOthers
+    end
+    if config.priceFactor ~= nil then
+        TradingPost.trader.buyPriceFactor = math.min(1.1, math.max(0.9, tonumber(config.priceFactor) or 0))
+        TradingPost.trader.sellPriceFactor = TradingPost.trader.buyPriceFactor + 0.2
+    end
+
+    TradingPost.sendConfig(true)
 end
 
-function TradingPost.tradingTweaks_setSettings(config)
-    local player = Player(callingPlayer)
-    local faction = Faction()
-    if player.index ~= faction.index and player.allianceIndex ~= faction.index then return end
-    
-    TradingPost.trader.buyFromOthers = config.buyFromOthers
-    TradingPost.trader.sellToOthers = config.sellToOthers
-    if config.goodsMargins then
-        TradingPost.trader.goodsMargins = {}
-        for name, factor in pairs(config.goodsMargins) do
-            TradingPost.trader.goodsMargins[name] = math.max(0.5, math.min(1.5, factor))
-        end
-    end
-    TradingPost.sendGoods() -- broadcast
-end
-callable(TradingPost, "tradingTweaks_setSettings")
+function TradingPost.tradingTweaks_changeGood(tabType, prevName, newName)
+    if anynils(tabType, prevName, newName) or prevName == newName then return end
+    local owner, station, player = checkEntityInteractionPermissions(Entity(), AlliancePrivilege.ManageStations)
+    if not owner then return end
 
-function TradingPost.tradingTweaks_addGood(isSold, goodName)
-    local player = Player(callingPlayer)
-    local faction = Faction()
-    if player.index ~= faction.index and player.allianceIndex ~= faction.index then return end
+    local fobidden = { ["Iron Ore"] = true, ["Titanium Ore"] = true, ["Naonite Ore"] = true, ["Trinium Ore"] = true, ["Xanion Ore"] = true, ["Ogonite Ore"] = true, ["Avorion Ore"] = true, ["Scrap Iron"] = true, ["Scrap Titanium"] = true, ["Scrap Naonite"] = true, ["Scrap Trinium"] = true, ["Scrap Xanion"] = true, ["Scrap Ogonite"] = true, ["Scrap Avorion"] = true }
+    local good = goods[newName]
+    if not good or good.illegal or fobidden[newName] then return end
 
-    local newGood = goods[goodName]
-    if not newGood then
-        TradingTweaksLog.Error("addGood - incorrect good name")
-        return
-    end
-    local found = false
-    for _, good in pairs(TradingPost.trader.boughtGoods) do
-        if good.name == goodName then
-            found = true
-            break
-        end
-    end
-    if not found then
-        for _, good in pairs(TradingPost.trader.soldGoods) do
-            if good.name == goodName then
-                found = true
-                break
-            end
-        end
-    end
-    if found then
-        player:sendChatMessage("", 1, "The station already sells/buys this type of good."%_t)
-        return
-    end
-    player:sendChatMessage("", 3, "Added new good '%s' to trading station."%_t, goodName)
-    if isSold then
-        if TradingPost.trader.numBought == 15 then
-            player:sendChatMessage("", 1, "Reached the limits of 15 bought/sold goods."%_t)
+    local self = TradingPost.trader
+    local stationGoods = tabType == 1 and self.soldGoods or self.boughtGoods
+    local index
+    for i, good in ipairs(stationGoods) do
+        if good.name == prevName then
+            index = i
+        elseif good.name == newName then -- good already exists on another line
             return
         end
-        TradingPost.trader.boughtGoods[#TradingPost.trader.boughtGoods+1] = newGood:good()
-        TradingPost.trader.numBought = #TradingPost.trader.boughtGoods
-    else
-        if TradingPost.trader.numSold == 15 then
-            player:sendChatMessage("", 1, "Reached the limits of 15 bought/sold goods."%_t)
-            return
-        end
-        TradingPost.trader.soldGoods[#TradingPost.trader.soldGoods+1] = newGood:good()
-        TradingPost.trader.numSold = #TradingPost.trader.soldGoods
     end
-    TradingPost.sendGoods() -- broadcast
-end
-callable(TradingPost, "tradingTweaks_addGood")
-
-function TradingPost.tradingTweaks_changeGood(isSold, prevName, newName)
-    local player = Player(callingPlayer)
-    local faction = Faction()
-    if player.index ~= faction.index and player.allianceIndex ~= faction.index then return end
-    
-    local newGood = goods[newName]
-    if not newGood then
-        TradingTweaksLog.Error("changeGood - incorrect good name")
-        return
+    if index then
+        stationGoods[index] = good:good()
+        broadcastInvokeClientFunction("receiveGoods", self.buyPriceFactor, self.sellPriceFactor, self.boughtGoods, self.soldGoods, self.policies, self.stats, self.ownSupplyTypes, self.supplyDemandInfluence, self.stockInfluence)
     end
-    local found = false
-    for _, good in pairs(TradingPost.trader.boughtGoods) do
-        if good.name == newName then
-            found = true
-            break
-        end
-    end
-    if not found then
-        for _, good in pairs(TradingPost.trader.soldGoods) do
-            if good.name == newName then
-                found = true
-                break
-            end
-        end
-    end
-    if found then
-        player:sendChatMessage("", 1, "The station already sells/buys this type of good."%_t)
-        return
-    end
-    found = false
-    if isSold then
-        for index, good in pairs(TradingPost.trader.soldGoods) do
-            if good.name == prevName then
-                TradingPost.trader.soldGoods[index] = newGood:good()
-                found = true
-                break
-            end
-        end
-    else
-        for index, good in pairs(TradingPost.trader.boughtGoods) do
-            if good.name == prevName then
-                TradingPost.trader.boughtGoods[index] = newGood:good()
-                found = true
-                break
-            end
-        end
-    end
-    if not found then
-        TradingTweaksLog.Error("changeGood - couldn't find the old good")
-        return
-    end
-    TradingPost.trader.goodsMargins[prevName] = nil
-    TradingPost.sendGoods() -- broadcast
 end
 callable(TradingPost, "tradingTweaks_changeGood")
 
-function TradingPost.tradingTweaks_swapGood(isSold, goodName)
-    local player = Player(callingPlayer)
-    local faction = Faction()
-    if player.index ~= faction.index and player.allianceIndex ~= faction.index then return end
+function TradingPost.tradingTweaks_removeGood(tabType, name)
+    if anynils(tabType, name) then return end
+    local owner, station, player = checkEntityInteractionPermissions(Entity(), AlliancePrivilege.ManageStations)
+    if not owner then return end
 
-    local newGood = goods[goodName]
-    if not newGood then
-        TradingTweaksLog.Error("swapGood - incorrect good name")
-        return
-    end
-    local found = false
-    if isSold then
-        if TradingPost.trader.numBought == 15 then
-            player:sendChatMessage("", 1, "Reached the limits of 15 bought/sold goods."%_t)
+    local self = TradingPost.trader
+    local stationGoods = tabType == 1 and self.soldGoods or self.boughtGoods
+    for i, good in ipairs(stationGoods) do
+        if good.name == name then
+            table.remove(stationGoods, i)
+            broadcastInvokeClientFunction("receiveGoods", self.buyPriceFactor, self.sellPriceFactor, self.boughtGoods, self.soldGoods, self.policies, self.stats, self.ownSupplyTypes, self.supplyDemandInfluence, self.stockInfluence)
             return
         end
-        for index, good in pairs(TradingPost.trader.soldGoods) do
-            if good.name == goodName then
-                table.remove(TradingPost.trader.soldGoods, index)
-                found = true
-                break
-            end
-        end
-        if not found then
-            TradingTweaksLog.Error("swapGood - couldn't find good")
-            return
-        end
-        TradingPost.trader.boughtGoods[#TradingPost.trader.boughtGoods+1] = newGood:good()
-    else
-        if TradingPost.trader.numSold == 15 then
-            player:sendChatMessage("", 1, "Reached the limits of 15 bought/sold goods."%_t)
-            return
-        end
-        for index, good in pairs(TradingPost.trader.boughtGoods) do
-            if good.name == goodName then
-                table.remove(TradingPost.trader.boughtGoods, index)
-                found = true
-                break
-            end
-        end
-        if not found then
-            TradingTweaksLog.Error("swapGood - couldn't find good")
-            return
-        end
-        TradingPost.trader.soldGoods[#TradingPost.trader.soldGoods+1] = newGood:good()
     end
-    TradingPost.trader.numSold = #TradingPost.trader.soldGoods
-    TradingPost.trader.numBought = #TradingPost.trader.boughtGoods
-    TradingPost.sendGoods() -- broadcast
-end
-callable(TradingPost, "tradingTweaks_swapGood")
-
-function TradingPost.tradingTweaks_removeGood(isSold, prevName)
-    local player = Player(callingPlayer)
-    local faction = Faction()
-    if player.index ~= faction.index and player.allianceIndex ~= faction.index then return end
-
-    local found = false
-    if isSold then
-        for index, good in pairs(TradingPost.trader.soldGoods) do
-            if good.name == prevName then
-                table.remove(TradingPost.trader.soldGoods, index)
-                found = true
-                break
-            end
-        end
-        TradingPost.trader.numSold = #TradingPost.trader.soldGoods
-    else
-        for index, good in pairs(TradingPost.trader.boughtGoods) do
-            if good.name == prevName then
-                table.remove(TradingPost.trader.boughtGoods, index)
-                found = true
-                break
-            end
-        end
-        TradingPost.trader.numBought = #TradingPost.trader.boughtGoods
-    end
-    if not found then
-        TradingTweaksLog.Error("removeGood - couldn't find good")
-        return
-    end
-    TradingPost.trader.goodsMargins[prevName] = nil
-    TradingPost.sendGoods() -- broadcast
 end
 callable(TradingPost, "tradingTweaks_removeGood")
+
+function TradingPost.tradingTweaks_addGood(tabType)
+    if anynils(tabType) then return end
+    local owner, station, player = checkEntityInteractionPermissions(Entity(), AlliancePrivilege.ManageStations)
+    if not owner then return end
+
+    local self = TradingPost.trader
+    local stationGoods = tabType == 1 and self.soldGoods or self.boughtGoods
+    local count = #stationGoods
+    if count >= 15 then return end -- can't have more than 15 goods
+
+    local fobidden = { ["Iron Ore"] = true, ["Titanium Ore"] = true, ["Naonite Ore"] = true, ["Trinium Ore"] = true, ["Xanion Ore"] = true, ["Ogonite Ore"] = true, ["Avorion Ore"] = true, ["Scrap Iron"] = true, ["Scrap Titanium"] = true, ["Scrap Naonite"] = true, ["Scrap Trinium"] = true, ["Scrap Xanion"] = true, ["Scrap Ogonite"] = true, ["Scrap Avorion"] = true }
+    for i, good in ipairs(stationGoods) do
+        fobidden[good.name] = true
+    end
+    for _, good in ipairs(goodsArray) do
+        if not good.illegal and not fobidden[good.name] then
+            stationGoods[count+1] = good:good()
+            player:sendChatMessage(Entity(), 3, "Good '%1%' was added to the list. Feel free to change it."%_T, good.name)
+            broadcastInvokeClientFunction("receiveGoods", self.buyPriceFactor, self.sellPriceFactor, self.boughtGoods, self.soldGoods, self.policies, self.stats, self.ownSupplyTypes, self.supplyDemandInfluence, self.stockInfluence)
+            return
+        end
+    end
+end
+callable(TradingPost, "tradingTweaks_addGood")
 
 
 end

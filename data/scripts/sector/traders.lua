@@ -4,6 +4,7 @@ if onServer() then
 include("utility")
 
 function Traders.update(timeStep) -- overridden
+
     local sector = Sector()
     if sector:getValue("war_zone") then return end
 
@@ -30,8 +31,11 @@ function Traders.update(timeStep) -- overridden
                         tradingStation = {station = station, script = script, bought = {}, sold = {}}
                         tradingStation.sold = {}
 
+                        local _, buyPriceFactor = station:invokeFunction(script, "getBuyPriceFactor")
+                        tradingStation.tradingTweaks_factor = lerp(buyPriceFactor or 1, 0.8, 1.2, 0.1, 0.9)
+
                         for i = 2, tablelength(results) do
-                            tradingStation.sold[#tradingStation.sold+1] = results[i]
+                            table.insert(tradingStation.sold, results[i])
                         end
                     end
                 end
@@ -44,16 +48,21 @@ function Traders.update(timeStep) -- overridden
                         if tradingStation == nil then
                             tradingStation = {station = station, script = script, bought = {}, sold = {}}
                         end
+                        
+                        if not tradingStation.tradingTweaks_factor then
+                            local _, buyPriceFactor = station:invokeFunction(script, "getBuyPriceFactor")
+                            tradingStation.tradingTweaks_factor = lerp(buyPriceFactor or 1, 0.8, 1.2, 0.1, 0.9)
+                        end
 
                         for i = 2, tablelength(results) do
-                            tradingStation.bought[#tradingStation.bought+1] = results[i]
+                            table.insert(tradingStation.bought, results[i])
                         end
 
                     end
                 end
 
                 if tradingStation then
-                    tradingStations[#tradingStations+1] = tradingStation
+                    table.insert(tradingStations, tradingStation)
                 end
             end
         end
@@ -71,36 +80,42 @@ function Traders.update(timeStep) -- overridden
         local sold = v.sold
         local script = v.script
 
-        -- these are all possibilities for goods to be bought from stations
-        for _, name in pairs(sold) do
-            local err, amount, maxAmount, sellPriceFactor = station:invokeFunction(script, "getStock", name)
-            if err == 0 and maxAmount > 0 and amount / maxAmount > 0.6 then
-                tradingPossibilities[#tradingPossibilities+1] = { tradeType = TradingUtility.TradeType.BuyFromStation, station = station, script = script, name = name }
-                tradingWeights[#tradingWeights+1] = lerp(sellPriceFactor, 0.5, 1.5, 1.0, 0.3)
+        local buyerPossible, sellerPossible = Traders.getSpawnableTraders(station, script)
+        if buyerPossible then
+            -- these are all possibilities for goods to be bought from stations
+            for _, name in pairs(sold) do
+                local err, amount, maxAmount = station:invokeFunction(script, "getStock", name)
+                if err == 0 and maxAmount > 0 and amount / maxAmount > 0.6 then
+                    tradingPossibilities[#tradingPossibilities+1] = {tradeType = TradingUtility.TradeType.BuyFromStation, station = station, script = script, name = name}
+                    tradingWeights[#tradingWeights+1] = 0.9 - v.tradingTweaks_factor
+                end
             end
         end
 
-        -- these are all possibilities for goods to be sold to stations
-        for _, name in pairs(bought) do
-            local err, amount, maxAmount, _, buyPriceFactor = station:invokeFunction(script, "getStock", name)
-            if err == 0 and maxAmount > 0 and amount / maxAmount < 0.4 then
-            
-                local amountTraded = maxAmount - amount
-                if TradingUtility.isScriptAConsumer(script) then
-                    if station.playerOwned or station.allianceOwned then
-                        local g = goods[name]
-                        if not g then
-                            print ("invalid good: '" .. name .. "'")
-                            return
-                        end
+        if sellerPossible then
+            -- these are all possibilities for goods to be sold to stations
+            for _, name in pairs(bought) do
+                local err, amount, maxAmount = station:invokeFunction(script, "getStock", name)
+                if err == 0 and maxAmount > 0 and amount / maxAmount < 0.4 then
 
-                        local maxValue = Balancing_GetSectorRichnessFactor(x, y, 1500000)
-                        amountTraded = math.min(amountTraded, math.max(2, math.ceil(maxValue / g.price)))
+                    local amountTraded = maxAmount - amount
+
+                    if TradingUtility.isScriptAConsumer(script) then
+                        if station.playerOwned or station.allianceOwned then
+                            local g = goods[name]
+                            if not g then
+                                print ("invalid good: '" .. name .. "'")
+                                return
+                            end
+
+                            local maxValue = Balancing_GetSectorRichnessFactor(x, y, 1500000)
+                            amountTraded = math.min(amountTraded, math.max(2, math.ceil(maxValue / g.price)))
+                        end
                     end
+
+                    tradingPossibilities[#tradingPossibilities+1] = {tradeType = TradingUtility.TradeType.SellToStation, station = station, script = script, name = name, amount = amountTraded}
+                    tradingWeights[#tradingWeights+1] = v.tradingTweaks_factor
                 end
-            
-                tradingPossibilities[#tradingPossibilities+1] = { tradeType = TradingUtility.TradeType.SellToStation, station = station, script = script, name = name, amount = amountTraded }
-                tradingWeights[#tradingWeights+1] = lerp(buyPriceFactor, 0.5, 1.5, 0.3, 1.0)
             end
         end
     end
@@ -108,7 +123,7 @@ function Traders.update(timeStep) -- overridden
     -- if there is no way for trade, exit
     if #tradingPossibilities == 0 then return end
 
-    -- choose one at random according to weights
+    -- choose one according to weights
     local trade = tradingPossibilities[selectByWeight(random(), tradingWeights)]
 
     -- create a trader ship that will fly to this station to trade

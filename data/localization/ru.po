@@ -1,50 +1,39 @@
-# ==========mods\Trading Tweaks\data\scripts\entity\merchants\consumer.lua ==========
-#:mods\Trading Tweaks\data\scripts\entity\merchants\consumer.lua:
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
+# ========== C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/consumer.lua ==========
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/consumer.lua:
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua:
 msgid "Station configuration"
 msgstr "Управление станцией"
 
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/consumer.lua:
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua:
+msgid "Amount of money spent on purchasing goods"
+msgstr "Сумма денег, потраченных на покупку товаров"
 
-# ==========mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua ==========
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "Good Settings"
-msgstr "Настройки товара"
-
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "Change good"
-msgstr "Изменить товар"
-
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "Add sold good"
-msgstr "Добавить продаваемый товар"
-
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "Add bought good"
-msgstr "Добавить покупаемый товар"
-
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "The station already has all types of goods."
-msgstr "Эта станция уже имеет все типы товаров."
-
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "Added new good '%s' to trading station."
-msgstr "Добавлен новый товар '%s' в торговую станцию."
-
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "The station already sells/buys this type of good."
-msgstr "Эта станция уже продает/покупает этот тип товара."
-
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "Moves good from sold to bought and vice versa."
-msgstr "Перемещает товар из продаваемых в покупаемые и наоборот."
-
-#:mods\Trading Tweaks\data\scripts\entity\merchants\tradingpost.lua:
-msgid "Reached the limits of 15 bought/sold goods."
-msgstr "Достигнут лимит в 15 покупаемых/продаваемых товаров."
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/consumer.lua:
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua:
+msgid "Total profit of the station; (sales - purchases)."
+msgstr "Общая прибыль станции; (продажи - покупки)."
 
 
-# ==========mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua ==========
-#:mods\Trading Tweaks\data\scripts\lib\tradingmanager.lua:
-msgid " (Optional)"
-msgstr " (Необяз.)"
+# ========== C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua ==========
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua:
+msgid "Add good"
+msgstr "Добавить товар"
+
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua:
+msgid "This station resells bought goods to traders."
+msgstr "Эта станция перепродает купленные товары торговцам."
+
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua:
+msgid "This station doesn't resell bought goods to traders."
+msgstr "Эта станция не перепродает купленные товары торговцам."
+
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua:
+msgid "Remove good"
+msgstr "Убрать товар"
+
+#: C:/Users/WIN 10/AppData/Roaming/Avorion/mods/Trading Tweaks/data/scripts/entity/merchants/tradingpost.lua:
+msgid "Good '%1%' was added to the list. Feel free to change it."
+msgstr "Товар '%1%' был добавлен в список. Вы можете изменить его в любое время."
+
 
