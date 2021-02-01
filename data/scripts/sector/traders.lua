@@ -6,7 +6,7 @@ include("utility")
 function Traders.update(timeStep) -- overridden
 
     local sector = Sector()
-    if sector:getValue("war_zone") then return end
+    if sector:getValue("war_zone") or sector:getValue("no_trade_zone") then return end
 
     -- find all stations that buy or sell goods
     local scripts = TradingUtility.getTradeableScripts()
@@ -17,7 +17,9 @@ function Traders.update(timeStep) -- overridden
 
     for _, station in pairs(stations) do
 
-        if not TradingUtility.hasTraders(station) then
+        -- 1.1.2 - 1.3.5 compat
+        if (Traders.isSpawnCandidate and Traders.isSpawnCandidate(station))
+          or (not Traders.isSpawnCandidate and not TradingUtility.hasTraders(station)) then
 
             for _, script in pairs(scripts) do
 

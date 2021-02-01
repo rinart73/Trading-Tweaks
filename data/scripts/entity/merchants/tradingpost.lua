@@ -356,8 +356,12 @@ function TradingPost.trader:useUpBoughtGoods(...)
     tradingTweaks_useUpBoughtGoods(self, ...)
 end
 
+if GameVersion() < Version(1, 3, 5) then
+
 function TradingPost.trader:updateOrganizeGoodsBulletins() -- overridden
     -- don't create Resource Shortage bulletins for Trading Posts
+end
+
 end
 
 -- CALLABLE --

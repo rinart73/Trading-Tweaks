@@ -21,7 +21,7 @@ meta =
 
     -- Version of your mod, should be in format 1.0.0 (major.minor.patch) or 1.0 (major.minor)
     -- This will be used to check for unmet dependencies or incompatibilities
-    version = "1.0",
+    version = "1.0.1",
 
     -- If your mod requires dependencies, enter them here. The game will check that all dependencies given here are met.
     -- Possible attributes:
@@ -40,7 +40,7 @@ meta =
     -- },
     dependencies = {
         {id = "1736561351", max = "10.0", incompatible = true},
-        {id = "1722652757", min = "1.4"},
+        {id = "1722652757", min = "1.5"},
         {id = "Avorion", min = "1.1.2", max = "1.*"}
     },
 
